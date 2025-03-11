@@ -6,9 +6,9 @@ const { fromPath } = require("pdf2pic");
 const ocrSpaceApi = require('ocr-space-api-wrapper'); // For OCR.space API
 const File = require('../models/file'); // Adjust the path as needed
 const axios = require('axios');
-//const api_key = "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";
-const api_key = "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"
+//const api_key = "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"
 const Anthropic = require('@anthropic-ai/sdk');
+require("dotenv").config();
 
 // Instantiate the client with your API key.
 
@@ -159,7 +159,7 @@ async  getDatafromai(req,res) {
         }    // Build the payload using the SDK's messages format.
 
         const client = new Anthropic.Anthropic({
-          apiKey: api_key, // Replace with your actual API key.
+          apiKey: process.env.api_key, // Replace with your actual API key.
         });
     const message = await client.messages.create({
       model: "claude-3-7-sonnet-20250219",
