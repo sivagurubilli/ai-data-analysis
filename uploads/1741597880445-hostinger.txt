@@ -1,0 +1,44 @@
+http://157.173.221.62:8050
+
+ssh root@your_ip_address
+cd /var/www/
+clone the app from GitHub
+
+sudo nano /etc/nginx/sites-available/mediq-web.conf
+server {
+    listen 8081;
+    server_name your_ip_address;
+
+    root /var/www/second-app/build;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+sudo ln -s /etc/nginx/sites-available/mediq-web.conf /etc/nginx/sites-enabled/
+if it already exists remove
+ sudo rm /etc/nginx/sites-enabled/mediq-web.conf
+
+sudo systemctl reload nginx
+
+sudo systemctl start nginx
+
+
+
+
+server {
+    listen 80;
+    server_name your_domain_or_ip;
+
+    location / {
+        root /var/www/your_repo/build;  # Path to your build folder
+        try_files $uri $uri/ /index.html;  # Serve index.html for React Router
+    }
+
+    location ~ /\.well-known {
+        allow all;  # Allow access to ACME challenges for SSL certificate issuance
+    }
+}
+
