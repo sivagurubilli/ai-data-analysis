@@ -163,23 +163,35 @@ async  extractText(req, res) {
   }
 
   try {
-    // Read file as a buffer instead of using createReadStream
+    // Read file as a buffer
     const fileBuffer = await fs.promises.readFile(filePath);
 
     const form = new FormData();
     form.append('apikey', OCR_API_KEY);
     form.append('file', fileBuffer, {
-      filename: req.file.originalname, // Ensure proper file naming
-      contentType: 'application/pdf', // Explicitly set content type
+      filename: req.file.originalname,
+      contentType: 'application/pdf',
     });
     form.append('language', 'eng');
-    form.append('isTable', 'true');
+    form.append('isOverlayRequired', 'false');
     form.append('filetype', 'pdf');
+    form.append('iscreatesearchablepdf', 'false');
+    form.append('issearchablepdfhidetextlayer', 'false');
 
-    // Ensure correct headers
+    // Calculate the content length of the form-data
+    const getLength = () =>
+      new Promise((resolve, reject) => {
+        form.getLength((err, length) => {
+          if (err) return reject(err);
+          resolve(length);
+        });
+      });
+    const contentLength = await getLength();
+
+    // Merge the form headers with the calculated Content-Length.
     const headers = {
       ...form.getHeaders(),
-      'Content-Length': fileBuffer.length, // Explicitly set content length
+      'Content-Length': contentLength,
     };
 
     const { data } = await axios.post('https://api.ocr.space/parse/image', form, {
@@ -199,14 +211,16 @@ async  extractText(req, res) {
 
     res.json({ text: extractedText });
 
-    // Delete file after processing
+    // Clean up: Delete file after processing
     fs.promises.unlink(filePath).catch((unlinkErr) => {
       console.error('Error deleting file:', unlinkErr);
     });
-
   } catch (error) {
     console.error('OCR Error:', error.response ? error.response.data : error.message);
-    return res.status(500).json({ error: 'OCR failed', details: error.response ? error.response.data : error.message });
+    return res.status(500).json({ 
+      error: 'OCR failed', 
+      details: error.response ? error.response.data : error.message 
+    });
   }
 },
 
