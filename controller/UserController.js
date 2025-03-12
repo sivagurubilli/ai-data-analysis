@@ -163,7 +163,22 @@ async  extractText(req, res) {
   }
 
   try {
-    // Read file as a buffer
+    // Determine file type by checking the MIME type and/or file extension.
+    const extension = req.file.originalname.split('.').pop().toLowerCase();
+    const isTextFile =
+      req.file.mimetype === 'text/plain' || extension === 'txt';
+
+    if (isTextFile) {
+      // For text files, read and return the content directly.
+      const fileContent = await fs.promises.readFile(filePath, 'utf8');
+      // Clean up: Delete file after processing.
+      fs.promises.unlink(filePath).catch((unlinkErr) => {
+        console.error('Error deleting file:', unlinkErr);
+      });
+      return res.json({ text: fileContent });
+    }
+
+    // Otherwise, assume the file is a PDF and process it with OCR.
     const fileBuffer = await fs.promises.readFile(filePath);
 
     const form = new FormData();
@@ -217,9 +232,9 @@ async  extractText(req, res) {
     });
   } catch (error) {
     console.error('OCR Error:', error.response ? error.response.data : error.message);
-    return res.status(500).json({ 
-      error: 'OCR failed', 
-      details: error.response ? error.response.data : error.message 
+    return res.status(500).json({
+      error: 'OCR failed',
+      details: error.response ? error.response.data : error.message,
     });
   }
 },
