@@ -1,22 +1,24 @@
-const fs = require('fs').promises;
-const fsSync = require('fs'); // For synchronous folder checks
+const fs = require('fs');
+const axios = require('axios');
+const FormData = require('form-data');
 const path = require('path');
 const tesseract = require('node-tesseract-ocr');
 const { fromPath } = require("pdf2pic");
 const ocrSpaceApi = require('ocr-space-api-wrapper'); // For OCR.space API
-const File = require('../models/file'); // Adjust the path as needed
-const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
 require("dotenv").config();
+const multer = require('multer');
 
+
+const OCR_API_KEY = 'K85776845988957'; // Replace with your OCR.space API key
 // Instantiate the client with your API key.
 
 
 // Ensure the temporary folder for PDF conversion exists
-const tempImagesFolder = path.join(__dirname, '..', 'temp_images');
-if (!fsSync.existsSync(tempImagesFolder)) {
-  fsSync.mkdirSync(tempImagesFolder, { recursive: true });
-}
+// const tempImagesFolder = path.join(__dirname, '..', 'temp_images');
+// if (!fsSync.existsSync(tempImagesFolder)) {
+//   fsSync.mkdirSync(tempImagesFolder, { recursive: true });
+// }
 
 // Choose the OCR method: "tesseract" (default) or "ocrspace"
 const OCR_METHOD = process.env.OCR_METHOD || 'tesseract';
@@ -24,128 +26,189 @@ const OCR_METHOD = process.env.OCR_METHOD || 'tesseract';
 
 
 module.exports = {
-  async addDetails(req, res) {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ status: "NOK", error: "No file found" });
-      }
+  // async addDetails(req, res) {
+  //   try {
+  //     if (!req.file) {
+  //       return res.status(400).json({ status: "NOK", error: "No file found" });
+  //     }
       
-      // Create a new file record using the File model
-      const newFile = new File({
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        path: req.file.path,
-        uploadedAt: new Date()
-      });
+  //     // Create a new file record using the File model
+  //     const newFile = new File({
+  //       filename: req.file.filename,
+  //       originalName: req.file.originalname,
+  //       mimetype: req.file.mimetype,
+  //       size: req.file.size,
+  //       path: req.file.path,
+  //       uploadedAt: new Date()
+  //     });
       
-      // Save the file record to the database
-      const savedFile = await newFile.save();
+  //     // Save the file record to the database
+  //     const savedFile = await newFile.save();
       
-      // Return the saved file metadata as response
-      res.status(200).json({ status: "OK", file: savedFile });
-    } catch (error) {
-      res.status(500).json({ status: "NOK", error: error.message });
-    }
-  },
+  //     // Return the saved file metadata as response
+  //     res.status(200).json({ status: "OK", file: savedFile });
+  //   } catch (error) {
+  //     res.status(500).json({ status: "NOK", error: error.message });
+  //   }
+  // },
   
-  async getDetails(req, res) {
-    try {
-      // Retrieve all file records from the database
-      const files = await File.find({});
+  // async getDetails(req, res) {
+  //   try {
+  //     // Retrieve all file records from the database
+  //     const files = await File.find({});
       
-      // Process each file record
-      const filesWithContent = await Promise.all(
-        files.map(async (fileRecord) => {
-          let content = "";
-          try {
-            if (fileRecord.mimetype === "application/json") {
-              // Read JSON file and parse it
-              const jsonText = await fs.readFile(fileRecord.path, 'utf8');
-              content = JSON.parse(jsonText);
-            } else if (fileRecord.mimetype.startsWith("text/")) {
-              // Read plain text files
-              content = await fs.readFile(fileRecord.path, 'utf8');
-            } else if (fileRecord.mimetype.startsWith("image/")) {
-              // Use OCR for image files
-              if (OCR_METHOD === 'tesseract') {
-                const ocrConfig = {
-                  lang: 'eng',
-                  oem: 1,
-                  psm: 3, // Adjust if needed (try psm: 6 for a single uniform block)
-                };
-                console.log(`Running Tesseract OCR on image: ${fileRecord.path}`);
-                content = await tesseract.recognize(fileRecord.path, ocrConfig);
-                console.log(`Tesseract OCR result: ${content}`);
-              } else if (OCR_METHOD === 'ocrspace') {
-                const ocrOptions = {
-                  apikey: process.env.OCRSPACE_API_KEY || 'helloworld',
-                  language: 'eng',
-                };
-                console.log(`Running OCR.space API on image: ${fileRecord.path}`);
-                const ocrResult = await ocrSpaceApi.parseImageFromLocalFile(fileRecord.path, ocrOptions);
-                content = (ocrResult.ParsedResults && ocrResult.ParsedResults[0] && ocrResult.ParsedResults[0].ParsedText)
-                  ? ocrResult.ParsedResults[0].ParsedText
-                  : "No text detected";
-                console.log(`OCR.space result: ${content}`);
-              }
-            } else if (fileRecord.mimetype === "application/pdf") {
-              // For PDFs: convert the first page to an image then run OCR
-              const pdf2picOptions = {
-                density: 100,
-                saveFilename: "temp", // temporary filename prefix
-                savePath: tempImagesFolder, // our ensured folder
-                format: "png",
-                width: 600,
-                height: 800
-              };
-              const converter = fromPath(fileRecord.path, pdf2picOptions);
-              console.log(`Converting PDF to image: ${fileRecord.path}`);
-              const imageResponse = await converter(1);
-              console.log(`PDF converted to image at: ${imageResponse.path}`);
+  //     // Process each file record
+  //     const filesWithContent = await Promise.all(
+  //       files.map(async (fileRecord) => {
+  //         let content = "";
+  //         try {
+  //           if (fileRecord.mimetype === "application/json") {
+  //             // Read JSON file and parse it
+  //             const jsonText = await fs.readFile(fileRecord.path, 'utf8');
+  //             content = JSON.parse(jsonText);
+  //           } else if (fileRecord.mimetype.startsWith("text/")) {
+  //             // Read plain text files
+  //             content = await fs.readFile(fileRecord.path, 'utf8');
+  //           } else if (fileRecord.mimetype.startsWith("image/")) {
+  //             // Use OCR for image files
+  //             if (OCR_METHOD === 'tesseract') {
+  //               const ocrConfig = {
+  //                 lang: 'eng',
+  //                 oem: 1,
+  //                 psm: 3, // Adjust if needed (try psm: 6 for a single uniform block)
+  //               };
+  //               console.log(`Running Tesseract OCR on image: ${fileRecord.path}`);
+  //               content = await tesseract.recognize(fileRecord.path, ocrConfig);
+  //               console.log(`Tesseract OCR result: ${content}`);
+  //             } else if (OCR_METHOD === 'ocrspace') {
+  //               const ocrOptions = {
+  //                 apikey: process.env.OCRSPACE_API_KEY || 'helloworld',
+  //                 language: 'eng',
+  //               };
+  //               console.log(`Running OCR.space API on image: ${fileRecord.path}`);
+  //               const ocrResult = await ocrSpaceApi.parseImageFromLocalFile(fileRecord.path, ocrOptions);
+  //               content = (ocrResult.ParsedResults && ocrResult.ParsedResults[0] && ocrResult.ParsedResults[0].ParsedText)
+  //                 ? ocrResult.ParsedResults[0].ParsedText
+  //                 : "No text detected";
+  //               console.log(`OCR.space result: ${content}`);
+  //             }
+  //           } else if (fileRecord.mimetype === "application/pdf") {
+  //             // For PDFs: convert the first page to an image then run OCR
+  //             const pdf2picOptions = {
+  //               density: 100,
+  //               saveFilename: "temp", // temporary filename prefix
+  //               savePath: tempImagesFolder, // our ensured folder
+  //               format: "png",
+  //               width: 600,
+  //               height: 800
+  //             };
+  //             const converter = fromPath(fileRecord.path, pdf2picOptions);
+  //             console.log(`Converting PDF to image: ${fileRecord.path}`);
+  //             const imageResponse = await converter(1);
+  //             console.log(`PDF converted to image at: ${imageResponse.path}`);
               
-              if (OCR_METHOD === 'tesseract') {
-                const ocrConfig = {
-                  lang: 'eng',
-                  oem: 1,
-                  psm: 3,
-                };
-                content = await tesseract.recognize(imageResponse.path, ocrConfig);
-                console.log(`Tesseract OCR result for PDF: ${content}`);
-              } else if (OCR_METHOD === 'ocrspace') {
-                const ocrOptions = {
-                  apikey: process.env.OCRSPACE_API_KEY || 'helloworld',
-                  language: 'eng',
-                };
-                const ocrResult = await ocrSpaceApi.parseImageFromLocalFile(imageResponse.path, ocrOptions);
-                content = (ocrResult.ParsedResults && ocrResult.ParsedResults[0] && ocrResult.ParsedResults[0].ParsedText)
-                  ? ocrResult.ParsedResults[0].ParsedText
-                  : "No text detected";
-                console.log(`OCR.space result for PDF: ${content}`);
-              }
-              // Optionally remove the temporary image file after OCR is complete:
-              // await fs.unlink(imageResponse.path);
-            } else {
-              // For other file types, return Base64 encoding
-              const fileBuffer = await fs.readFile(fileRecord.path);
-              content = fileBuffer.toString('base64');
-            }
-          } catch (err) {
-            console.error("Error processing file:", err);
-            content = "Error processing file content";
-          }
-          return { ...fileRecord.toObject(), content };
-        })
-      );
+  //             if (OCR_METHOD === 'tesseract') {
+  //               const ocrConfig = {
+  //                 lang: 'eng',
+  //                 oem: 1,
+  //                 psm: 3,
+  //               };
+  //               content = await tesseract.recognize(imageResponse.path, ocrConfig);
+  //               console.log(`Tesseract OCR result for PDF: ${content}`);
+  //             } else if (OCR_METHOD === 'ocrspace') {
+  //               const ocrOptions = {
+  //                 apikey: process.env.OCRSPACE_API_KEY || 'helloworld',
+  //                 language: 'eng',
+  //               };
+  //               const ocrResult = await ocrSpaceApi.parseImageFromLocalFile(imageResponse.path, ocrOptions);
+  //               content = (ocrResult.ParsedResults && ocrResult.ParsedResults[0] && ocrResult.ParsedResults[0].ParsedText)
+  //                 ? ocrResult.ParsedResults[0].ParsedText
+  //                 : "No text detected";
+  //               console.log(`OCR.space result for PDF: ${content}`);
+  //             }
+  //             // Optionally remove the temporary image file after OCR is complete:
+  //             // await fs.unlink(imageResponse.path);
+  //           } else {
+  //             // For other file types, return Base64 encoding
+  //             const fileBuffer = await fs.readFile(fileRecord.path);
+  //             content = fileBuffer.toString('base64');
+  //           }
+  //         } catch (err) {
+  //           console.error("Error processing file:", err);
+  //           content = "Error processing file content";
+  //         }
+  //         return { ...fileRecord.toObject(), content };
+  //       })
+  //     );
       
-      res.status(200).json({ status: "OK", files: filesWithContent });
-    } catch (error) {
-      res.status(500).json({ status: "NOK", error: error.message });
+  //     res.status(200).json({ status: "OK", files: filesWithContent });
+  //   } catch (error) {
+  //     res.status(500).json({ status: "NOK", error: error.message });
+  //   }
+  // },
+
+// OCR Extraction Route
+
+
+async  extractText(req, res) {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  console.log('Received file:', req.file);
+
+  const filePath = req.file.path;
+  if (!fs.existsSync(filePath)) {
+    return res.status(500).json({ error: 'Uploaded file not found' });
+  }
+
+  try {
+    // Read file as a buffer instead of using createReadStream
+    const fileBuffer = await fs.promises.readFile(filePath);
+
+    const form = new FormData();
+    form.append('apikey', OCR_API_KEY);
+    form.append('file', fileBuffer, {
+      filename: req.file.originalname, // Ensure proper file naming
+      contentType: 'application/pdf', // Explicitly set content type
+    });
+    form.append('language', 'eng');
+    form.append('isTable', 'true');
+    form.append('filetype', 'pdf');
+
+    // Ensure correct headers
+    const headers = {
+      ...form.getHeaders(),
+      'Content-Length': fileBuffer.length, // Explicitly set content length
+    };
+
+    const { data } = await axios.post('https://api.ocr.space/parse/image', form, {
+      headers,
+      maxBodyLength: 50 * 1024 * 1024, // 50MB
+      maxContentLength: 50 * 1024 * 1024,
+    });
+
+    console.log('OCR API Response:', data);
+
+    if (data.IsErroredOnProcessing) {
+      return res.status(500).json({ error: 'OCR processing failed', details: data.ErrorMessage });
     }
-  },
 
+    const extractedText = data.ParsedResults?.map((r) => r.ParsedText).join('\n') || 'No text extracted';
+    console.log('Extracted Text:', extractedText);
 
+    res.json({ text: extractedText });
+
+    // Delete file after processing
+    fs.promises.unlink(filePath).catch((unlinkErr) => {
+      console.error('Error deleting file:', unlinkErr);
+    });
+
+  } catch (error) {
+    console.error('OCR Error:', error.response ? error.response.data : error.message);
+    return res.status(500).json({ error: 'OCR failed', details: error.response ? error.response.data : error.message });
+  }
+},
 
 
 

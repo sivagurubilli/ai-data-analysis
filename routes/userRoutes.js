@@ -21,12 +21,13 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-
 const router = express.Router();
 
-router.post("/v1/users/upload-file", upload.single('file'), userController.addDetails);
-router.get("/v1/users/get-data", userController.getDetails);
+// router.post("/v1/users/upload-file", upload.single('file'), userController.addDetails);
+// router.get("/v1/users/get-data", userController.getDetails);
 router.post("/v1/users/get-data-from-ai", userController.getDatafromai);
+router.post("/v1/users/extract-text", upload.single('file'), userController.extractText);
+
 
 
 module.exports = router;
